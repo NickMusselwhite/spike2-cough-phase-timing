@@ -1,0 +1,520 @@
+'''For Ivan/Spike7 compatibility
+'''Replace "_" in var names
+'''Added ";" to end of line 28, 181, & 381 Doesn't seem to effect spike9 but breaks spike 7
+
+'Version 8.2.1 Records I_Peak. This was left out for some reason. Will make Fixing Script
+'    Also warns about duplicate channel names i.e. "Dia 1, Dia 2" or "Dia, CruralDia". 
+'Version 8.1 Fixed CGH file name to account for 3 or 4 character animal numbers.
+'Version 8 fixes ESPR Trough (Was reading Max in I instead of Min) 
+'Version 7 Restructures data output and is not compatable with data files from previous versions. Be aware when merging data from prior measuring periods
+'To Do:
+'Add Ballistic and Compound E1 Duration...                                Done
+'Show Both ABD Raw...                                                   Done
+'Fix Cursor 4 Window movement so that it uses current view size?...     Done
+'Auto optimize pressure traces...                                       Done
+'Add Espr troughs...                                                    Done
+'Simplify data output regarding cursors...                              Done
+'   -Ballistic Data should stay as original E1 end...                    Axed for new data output
+'   -Total E1 should be added to the end (no peak or time needed)...    Axed for new data output
+'   -I will probably be just the whole of the raw emg...                Yes?
+'Guess next cursor position using previous cursor positions...            Done
+'Added Active cursors for stim on/off...                                Done
+'Add way for script to recognize 3 and 4 number CGH numbers             Done 8.1
+'Record I_Peak..........................................................Done 8.2
+'Add Warning for multiple named channels................................Done 8.2
+
+var diaChan,  abdChan,  pslChan,  psrChan,  esprChan,  abdlChan,  abdrChan,  etCO2Chan,  pcaChan,  addChan, chanString$;
+
+GetChanNumbers();
+Proc GetChanNumbers()
+var clist%[5];'Increased to detect up to 4 similar named channels
+ChanList(clist%[], "=Dia", 16384);
+diaChan := clist%[1];
+multipleChannelWarning%(clist%[0], " DIA ");
+PrintLog(clist%[0]);
+ChanList(clist%[], "=PS L", 16384);
+pslChan := clist%[1];
+multipleChannelWarning%(clist%[0], " PS L");
+'PrintLog(pslChan);
+ChanList(clist%[], "=PS R", 16384);
+psrChan := clist%[1];
+multipleChannelWarning%(clist%[0], " PS R ");
+'PrintLog(psrChan);
+ChanList(clist%[], "=Esoph", 16384);
+esprChan := clist%[1];
+multipleChannelWarning%(clist%[0], " ESPR ");
+'PrintLog(esprChan);
+ChanList(clist%[], "=ABD L", 16384);
+abdlChan := clist%[1];
+multipleChannelWarning%(clist%[0], " ABD L ");
+'PrintLog(abdlChan);
+ChanList(clist%[], "=ABD R", 16384);
+abdrChan := clist%[1];
+multipleChannelWarning%(clist%[0], " ABD R ");
+'PrintLog(abdrChan);
+ChanList(clist%[], "=CO2", 16384);
+etCO2Chan := clist%[1];
+multipleChannelWarning%(clist%[0], " ETCO2 ");
+'PrintLog(abdrChan);
+ChanList(clist%[], "=PCA", 16384);
+pcaChan := clist%[1];
+multipleChannelWarning%(clist%[0], " PCA ");
+'PrintLog(abdrChan);
+ChanList(clist%[], "=Add", 16384);
+addChan := clist%[1];
+multipleChannelWarning%(clist%[0], " ADD ");
+'PrintLog(abdrChan);
+return;
+end;
+
+
+
+var dataVector$[43],  DiaPeak,  AbdPeak,  CoughNumber,  DiaPeakTime,  AbdPeakTime,  InterCoughBehavior,  TrialStartTime,
+TrialEndTime,  AbdBaseline, PSRPeak,  PSLPeak,  PSRPeakTime,  PSLPeakTime, ABDLPeak, ABDLPeakTime, ABDRPeak, ABDRPeakTime,
+CO2Peak, CO2PeakTime, ESPRPeak, ESPRPeakTime,  PCAPeak, PCAPeakTime,  ADDPeak,  ADDPeakTime;
+'Generated toolbar code
+DoToolbar();
+'Try it out
+Halt;
+
+
+
+
+Func DoToolbar()    'Set your own name...
+ToolbarClear();     'Remove any old buttons
+ToolbarSet(1,  "Quit|0x6d");    'This button returns its number
+ToolbarSet(3,  "Set Up",  setUp%);
+ToolbarSet(4,  "Go To Trial",  goToTrial%);
+ToolbarSet(5,  "Stim On/Off",  stimOnOff%);
+'ToolbarSet(7,  "Set E1",  setEOne%);
+ToolbarSet(9,  "Standard Cough",  measureCough%);
+ToolbarSet(11,  "Cough -> Misc APB",  measureCoughHasAPB%);
+ToolbarSet(12,  "Cough -> Breath",  measureCoughHasBreath%);
+ToolbarSet(13,  "Cough -> Swallow",  measureCoughHasSwallow%);
+'ToolbarSet(15,  "PostT Threshold",  setEPostT%);
+return Toolbar("Your prompt",  1023);
+end;
+
+
+
+
+Func setUp%() 
+var ExperimentFileName$, ExperimentFileNumber$, ExperimentNumber$;
+'Gets File number(YYY) and CGH number(XXX) assuming CGH_XXX_YYY.smrx
+ExperimentFileName$ := FileName$(3);
+ExperimentFileNumber$:= FileName$(4);
+ExperimentNumber$ := Mid$(ExperimentFileName$, 5, 4);'4 for 4 digit exp, 3 for three
+Trim(ExperimentNumber$, "_");
+
+dataVector$[0] := ExperimentNumber$; 
+dataVector$[1] := ExperimentFileNumber$; 
+dataVector$[2] := "";'(Maybe Delete) Condition?
+dataVector$[3] := "TB"; 
+
+UnColorUnProcess();'REMOVE PRIOR CHANNEL PROSSESES AND RESET COLOR TO DEFAULT
+NewWin();'CREATE A NEW WINDOW W/ RELEVANT CHANS AND HIDE OLD ONE
+CursorSet(0);'Deletes all cursors
+CursorSet(6, Cursor(0)+1, Cursor(0)+2, Cursor(0)+3, Cursor(0)+4, Cursor(0)+5, Cursor(0)+6);
+ABDSelect();
+FindCO2Offset();
+DupDeleteRecolor();
+CProcess();
+
+'Find Offset?
+'Create cursors if not done so already
+
+'CursorVisible(0, 1);'shows cursor 0
+
+
+
+ToolbarText("Set Up Done!");
+return 1;  'This leaves toolbar active
+end;
+
+
+
+
+Proc UnColorUnProcess()'REMOVE PRIOR CHANNEL PROSSESES AND RESET COLOR TO DEFAULT
+var i%,  defaultcolour,  defaultr,  defaultg,  defaultb,  chanlist%[100];
+'Set all channels back to green
+defaultcolour := ColourGet(0, 2, defaultr,  defaultg,  defaultb);
+ChanList(chanlist%[], 2048);
+for i% := 1 to chanlist%[0] step 1 do
+    ChanColourSet(chanlist%[i%], 1, defaultr, defaultg, defaultb);
+next;
+
+ChanProcessClear(diaChan, -1);'delete all chan prosseses
+ChanProcessClear(abdlChan, -1);
+ChanProcessClear(abdrChan, -1);
+ChanProcessClear(pslChan, -1);
+ChanProcessClear(psrChan, -1);
+ChanProcessClear(esprChan, -1);
+ChanProcessClear(etCO2Chan, -1);
+ChanProcessClear(pcaChan, -1);
+ChanProcessClear(addChan, -1);
+
+return;
+end;
+
+
+
+
+Proc NewWin()'CREATE A NEW WINDOW W/ RELEVANT CHANS AND HIDE OLD ONE
+var newwin,  oldview;
+oldview := View();
+newwin := WindowDuplicate();
+ChanHide(-1);
+ChanShow("=Dia|ABD|Esoph|BP|CO2|TextMark|PCA|Add");
+WindowVisible(1);
+View(oldview).WindowVisible(0);
+FrontView(newwin);
+Draw(XLow(), 30);
+return;
+end;
+
+
+
+
+Proc ABDSelect()
+var whatchan;
+Draw(Input("Find a Trial", 0), 30);
+whatchan := Interact("ABD L or ABD R", 1023, 0, "ABD R", "ABD L");
+docase
+    case whatchan = 1 then
+        abdChan := abdrChan;
+    case whatchan = 2 then
+        abdChan := abdlChan;
+endcase;
+dataVector$[4] := ChanTitle$(abdChan);
+return;
+end;
+
+
+
+
+Proc FindCO2Offset()
+var CO2Offset;
+CursorActive(2, 16, 0, "Cursor(1)+1");
+Cursor(1, XLow()+5);
+Cursor(0, Cursor(0));
+Interact("Use Cursor 1 and 2 to set CO2 offset", 1023);
+CO2Offset := Cursor(1) - Cursor(2);
+ChanProcessAdd(etCO2Chan, 4, CO2Offset);
+dataVector$[5] :=  str$(CO2Offset, 0, -5);
+ToolbarText(str$(CO2Offset, 0, -5));
+CursorActive(2, 0);
+Cursor(1, Cursor(0));
+Cursor(2, Cursor(0));
+return;
+end;
+
+
+
+
+Proc DupDeleteRecolor() 'Beautify Channels
+var diaChanRAWDUP,  abdChanRAWDUP,  psrChanRAWDUP,  pslChanRAWDUP, esprChanRAWDUP, 
+abdlChanRAWDUP, abdrChanRAWDUP;
+
+
+
+
+'Find and delete duplicates
+diaChanRAWDUP := DupChan(diaChan, 1);
+abdlChanRAWDUP := DupChan(abdlChan, 1);
+abdrChanRAWDUP := DupChan(abdrChan, 1);
+if diaChanRAWDUP > 0 then
+    ChanDelete(diaChanRAWDUP);
+endif;
+if abdlChanRAWDUP > 0 then
+    ChanDelete(abdlChanRAWDUP);
+endif;
+if abdrChanRAWDUP > 0 then
+    ChanDelete(abdrChanRAWDUP);
+endif;
+
+
+psrChanRAWDUP := DupChan(psrChan, 1);
+pslChanRAWDUP := DupChan(pslChan, 1);
+if psrChanRAWDUP > 0 then
+    ChanDelete(psrChanRAWDUP);
+endif;
+if pslChanRAWDUP > 0 then
+    ChanDelete(pslChanRAWDUP);
+endif;
+
+esprChanRAWDUP := DupChan(esprChan, 1);
+if esprChanRAWDUP > 0 then
+    ChanDelete(esprChanRAWDUP);
+endif;
+
+'create and show new duplicates
+diaChanRAWDUP := ChanDuplicate(diaChan);
+abdChanRAWDUP := ChanDuplicate(abdChan);
+ChanShow(diaChanRAWDUP); Optimise(diaChanRAWDUP);
+ChanShow(abdChanRAWDUP); Optimise(abdChanRAWDUP);
+
+
+psrChanRAWDUP := ChanDuplicate(psrChan);
+pslChanRAWDUP := ChanDuplicate(pslChan);
+ChanShow(psrChanRAWDUP); Optimise(psrChanRAWDUP);
+ChanShow(pslChanRAWDUP); Optimise(pslChanRAWDUP);
+
+'Should Draw chanels with I/E Specific color ONLY FOR MAIN TIMING CHANS
+ChanColourSet(diaChan, 1, 0, 0, 10);ChanColourSet(diaChanRAWDUP, 1, 0, 0, 10);
+ChanColourSet(abdChan, 1, 10, 0, 0);ChanColourSet(abdChanRAWDUP, 1, 10, 0, 0);
+
+'Added in V7 Should dup and show the other raw abdominal chan
+if abdChan = abdlChan then 
+    abdrChanRAWDUP := ChanDuplicate(abdrChan);
+    ChanShow(abdrChanRAWDUP);Optimise(abdrChanRAWDUP);
+else
+    abdlChanRAWDUP := ChanDuplicate(abdlChan);
+    ChanShow(abdlChanRAWDUP);Optimise(abdlChanRAWDUP);
+endif;
+
+
+
+return; 
+end;
+
+
+
+
+Proc CProcess()'Process Channels
+var smoothtimeconst := 0.05; ', dcremovetimeconst := 0;
+'Smooth and Rec
+ChanProcessAdd(diaChan, 0);
+ChanProcessAdd(diaChan, 1, smoothtimeconst);
+ChanProcessAdd(abdlChan, 0);
+ChanProcessAdd(abdlChan, 1, smoothtimeconst);
+ChanProcessAdd(abdrChan, 0);
+ChanProcessAdd(abdrChan, 1, smoothtimeconst);
+Optimise(diaChan);
+Optimise(abdlChan);
+Optimise(abdrChan);
+
+ChanProcessAdd(psrChan, 0);
+ChanProcessAdd(psrChan, 1, smoothtimeconst);
+ChanProcessAdd(pslChan, 0);
+ChanProcessAdd(pslChan, 1, smoothtimeconst);
+Optimise(psrChan);
+Optimise(pslChan);
+
+ChanProcessAdd(pcaChan, 0);
+ChanProcessAdd(pcaChan, 1, smoothtimeconst);
+ChanProcessAdd(addChan, 0);
+ChanProcessAdd(addChan, 1, smoothtimeconst);
+Optimise(pcaChan);
+Optimise(addChan);
+
+'dc remove
+'ChanProcessAdd(esprChan, 2, dcremovetimeconst);
+
+dataVector$[6] := str$(smoothtimeconst, 0, -5);
+'DC offset doesnt work well for 60 second trials 
+'instead we grab the espr @ cursor 4 (Istart/e2 end)
+'this value can be subtracted from espr peak to control
+'for baseline drift
+'dataVector$[32] := str$(dcremovetimeconst, 0, -5); 
+
+
+Yield(0);'updates display and lets spike finish "thinking"
+return;
+end;
+
+Func goToTrial%()   'Move to trial
+'Your code in here...
+var trialTime, viewSize, experimentTrialNumber;
+viewSize := 80;
+experimentTrialNumber := Input("Trial Number TB:", experimentTrialNumber);
+trialTime := Input("Trial Time", trialTime);
+Draw(trialTime-10, viewSize);
+ToolbarText("Trial " + str$(experimentTrialNumber));
+dataVector$[7] := str$(experimentTrialNumber);
+CoughNumber := 0;
+dataVector$[2] := Input$("Condition", "");
+Cursor(1, 0);
+Cursor(2, 0);
+Cursor(3, 0);
+Cursor(4, 0);
+Cursor(5, 0);
+Cursor(6, 0);
+'CursorActive(3, 0);
+'Cursor(1, XLow()+5);
+'CursorActive(2, 16, 0, "Cursor(1)+10");
+'Cursor(0, Cursor(0));
+'Cursor(2, XLow()+10);
+return 1;  'This leaves toolbar active
+end;
+
+
+Func stimOnOff%()
+var stimdur;
+CursorActive(2, 14, 30, "Cursor(1)", "Cursor(1)+5");
+CursorActive(4, 14, 30, "Cursor(3)", "Cursor(3)+5");
+Cursor(1, XLow()+5);
+'Cursor(2, Cursor(1)+1);
+Cursor(3, XLow()+10);
+'Cursor(4, Cursor(3)+1);
+Cursor(0, Cursor(0));
+Interact("Use Cursor 2 and 4 to set stimulus on and off", 1023);
+TrialStartTime := Cursor(2);
+TrialEndTime := Cursor(4);
+dataVector$[8] := str$(TrialStartTime, 0, -5); dataVector$[9] := str$(TrialEndTime, 0, -5);
+stimdur := TrialEndTime-TrialStartTime;
+ToolbarText(str$(stimdur, 0, -5));
+CursorActive(2, 0);
+CursorActive(4, 0);
+Cursor(2, Cursor(1)+.5);
+Cursor(3, Cursor(2)+.5);
+Cursor(4, Cursor(3)+.5);
+Cursor(5, Cursor(4)+.5);
+Cursor(6, Cursor(5)+.5);
+CursorActive(2, 16, 0, "Cursor(3)-0.05");
+'Cursor(0, Cursor(1));
+
+
+return 1;  'This leaves toolbar active
+end;
+
+Func measureCough%()
+measureCoughCommon(0);
+'InterCoughBehavior := 0;
+return 1;  'This leaves toolbar active
+end;
+
+Func measureCoughHasAPB%()
+measureCoughCommon(1);
+'InterCoughBehavior := 1;
+return 1;  'This leaves toolbar active
+end;
+
+Func measureCoughHasBreath%()
+measureCoughCommon(2);
+'InterCoughBehavior := 2;
+return 1;  'This leaves toolbar active
+end;
+Func measureCoughHasSwallow%()
+measureCoughCommon(3);
+'InterCoughBehavior := 3;
+return 1;  'This leaves toolbar active
+end;
+
+Func multipleChannelWarning%(clist%, chanString$)
+if clist% > 1 then
+    Message("WARNING: MULTIPLE" + chanString$ + "CHANNELS DETECTED \n RENAME OR DELETE CHANNELS");
+    halt;
+endif;
+return;
+end;
+
+Proc measureCoughCommon(InterCoughBehavior)
+var IEMGStart,  IEMGEnd, IEMGPeak,  E1Start,  E1End,  E2Start,  E2End,  null,  esprZero,  xwinrange,  ESPRTrough,  ESPRTroughTime, E1BalisticEnd, E1ActiveEnd,
+PCAInspPeak, PCAInspPeakTime, PCAExpPeak, PCAExpPeakTime, c21, c32, c43, c54, c65;
+
+'IEMGStart := Cursor(1);
+'IEMGEnd := Cursor(2);
+'E1Start := Cursor(2);
+'E1End := Cursor(3);
+'E2Start := Cursor(3);
+'E2End := Cursor(4);
+'E2End := Cursor(5);
+'E2End := Cursor(6);
+
+IEMGStart := Cursor(1);
+IEMGPeak := Cursor(2);'Not really peak? Need batter var name
+IEMGEnd := Cursor(3);
+
+E1BalisticEnd := Cursor(4);
+E1ActiveEnd := Cursor(5);
+
+E2End := Cursor(6);
+
+
+
+MinMax(diaChan, IEMGStart, IEMGEnd, null, DiaPeak, null, DiaPeakTime);
+MinMax(abdChan, IEMGEnd, E1BalisticEnd, null, AbdPeak, null, AbdPeakTime);
+MinMax(pslChan, IEMGStart, IEMGEnd, null, PSLPeak, null, PSLPeakTime);
+MinMax(psrChan, IEMGStart, IEMGEnd, null, PSRPeak, null, PSRPeakTime);
+MinMax(abdlChan, IEMGEnd, E1BalisticEnd, null, ABDLPeak, null, ABDLPeakTime);
+MinMax(abdrChan, IEMGEnd, E1BalisticEnd, null, ABDRPeak, null, ABDRPeakTime);
+
+MinMax(etCO2Chan, IEMGEnd, E2End, null, CO2Peak, null, CO2PeakTime);
+MinMax(esprChan, IEMGEnd, E1ActiveEnd, null, ESPRPeak, null, ESPRPeakTime);
+'Fixed in v8 Min and Max Switched
+MinMax(esprChan, IEMGStart, IEMGEnd, ESPRTrough, null, ESPRTroughTime, null);
+
+'add PCA and ADD peaks & Peak Times and secod pca
+MinMax(pcaChan, IEMGStart, IEMGEnd, null, PCAInspPeak, null, PCAInspPeakTime);'Needs to be between 1-3 inccase swallow happens in E2
+MinMax(pcaChan, IEMGEnd, E1ActiveEnd, null, PCAExpPeak, null, PCAExpPeakTime);
+MinMax(addChan, IEMGPeak, E1BalisticEnd, null, ADDPeak, null, ADDPeakTime);'Needs to be between 1-3 inccase swallow happens in E2
+
+
+esprZero := ChanValue(esprChan, Cursor(1));'Changed from 4. Sould be close but 1 makes more sense
+
+
+
+CoughNumber += 1; 
+
+'record to vector and print to log
+dataVector$[10] := str$(CoughNumber, 0, -5);
+'PT -1
+dataVector$[11] := str$(IEMGStart, 0, -5); 
+dataVector$[12] := str$(IEMGEnd, 0, -5);
+dataVector$[13] := str$(E1BalisticEnd, 0, -5); 
+dataVector$[14] := str$(E1ActiveEnd, 0, -5);
+'dataVector$[10] := str$(E2Start, 0, -5); 
+dataVector$[15] := str$(E2End, 0, -5);
+
+'EMG
+dataVector$[16] := str$(DiaPeak, 0, -5);dataVector$[17] := str$(DiaPeakTime, 0, -5); 
+dataVector$[18] := str$(PSLPeak, 0, -5);dataVector$[19] := str$(PSLPeakTime, 0, -5);
+dataVector$[20] := str$(PSRPeak, 0, -5);dataVector$[21] := str$(PSRPeakTime, 0, -5);
+
+dataVector$[22] := str$(AbdPeak, 0, -5);dataVector$[23] := str$(AbdPeakTime, 0, -5);
+dataVector$[24] := str$(ABDLPeak, 0, -5);dataVector$[25] := str$(ABDLPeakTime, 0, -5);
+dataVector$[26] := str$(ABDRPeak, 0, -5);dataVector$[27] := str$(ABDRPeakTime, 0, -5);
+
+'Pressure & CO2 +2
+dataVector$[28] := str$(ESPRPeak, 0, -5);dataVector$[29] := str$(ESPRPeakTime, 0, -5);
+dataVector$[30] := str$(ESPRTrough, 0, -5);dataVector$[31] := str$(ESPRTroughTime, 0, -5);
+dataVector$[32] := str$(CO2Peak, 0, -5);dataVector$[33] := str$(CO2PeakTime, 0, -5);
+dataVector$[34] := str$(esprZero, 0, -5);
+
+'Other
+dataVector$[35] := str$(InterCoughBehavior, 0, -5);
+
+'The above are always
+
+'PCA & Add +2
+dataVector$[36] := str$(PCAInspPeak, 0, -5);dataVector$[37] := str$(PCAInspPeakTime, 0, -5);
+dataVector$[38] := str$(PCAExpPeak, 0, -5);dataVector$[39] := str$(PCAExpPeakTime, 0, -5);
+dataVector$[40] := str$(ADDPeak, 0, -5);dataVector$[41] := str$(ADDPeakTime, 0, -5);
+' Add IEMGPeak (Cursor 2)
+dataVector$[42] := str$(IEMGPeak, 0, -5);
+'Add second PCA activity
+
+PrintLog("", dataVector$);
+
+ToolbarText("Cough" + str$(CoughNumber));
+
+xwinrange := XHigh() - XLow();
+
+'Remembers cursor distances and tries to place them for next cough
+c21 := Cursor(2) - Cursor(1);
+c32 := Cursor(3) - Cursor(2);
+c43 := Cursor(4) - Cursor(3);
+c54 := Cursor(5) - Cursor(4);
+c65 := Cursor(6) - Cursor(5);
+
+Draw(Cursor(4)-(xwinrange/4)); 'Should move Window by 1/4 of curend view
+Cursor(1, Cursor(6));
+Cursor(2, Cursor(1)+ c21);
+Cursor(3, Cursor(2)+ c32);
+Cursor(4, Cursor(3)+ c43);
+Cursor(5, Cursor(4)+ c54);
+Cursor(6, Cursor(5)+ c65);
+
+Optimise(esprChan);
+return;
+end;
