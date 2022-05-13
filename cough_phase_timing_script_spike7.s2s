@@ -1,23 +1,28 @@
 '''For Ivan/Spike7 compatibility
 '''Replace "_" in var names
 '''Added ";" to end of line 28, 181, & 381 Doesn't seem to effect spike9 but breaks spike 7
+'''Could merge these with the semicolons but cannot test at the moment
 
-'Version 8.2.1 Records I_Peak. This was left out for some reason. Will make Fixing Script
+'Version 1.0.0 renumbered prior versions by appending zeros, even if some of the naming is odd
+'	       but this is the shareable working version of this script. Note: can't use underscores
+'	       in variable names with earlier versions of spike2 unfortunately. 	
+
+'Version 0.8.2.1 Records I_Peak. This was left out for some reason. Will make Fixing Script
 '    Also warns about duplicate channel names i.e. "Dia 1, Dia 2" or "Dia, CruralDia". 
-'Version 8.1 Fixed CGH file name to account for 3 or 4 character animal numbers.
-'Version 8 fixes ESPR Trough (Was reading Max in I instead of Min) 
-'Version 7 Restructures data output and is not compatable with data files from previous versions. Be aware when merging data from prior measuring periods
+'Version 0.8.1 Fixed CGH file name to account for 3 or 4 character animal numbers.
+'Version 0.8.0 fixes ESPR Trough (Was reading Max in I instead of Min) 
+'Version 0.7.0 Restructures data output and is not compatible with data files from previous versions. Be aware when merging data from prior measuring periods
 'To Do:
-'Add Ballistic and Compound E1 Duration...                                Done
+'Add Ballistic and Compound E1 Duration...                              Done
 'Show Both ABD Raw...                                                   Done
 'Fix Cursor 4 Window movement so that it uses current view size?...     Done
 'Auto optimize pressure traces...                                       Done
 'Add Espr troughs...                                                    Done
 'Simplify data output regarding cursors...                              Done
-'   -Ballistic Data should stay as original E1 end...                    Axed for new data output
+'   -Ballistic Data should stay as original E1 end...                   Axed for new data output
 '   -Total E1 should be added to the end (no peak or time needed)...    Axed for new data output
 '   -I will probably be just the whole of the raw emg...                Yes?
-'Guess next cursor position using previous cursor positions...            Done
+'Guess next cursor position using previous cursor positions...          Done
 'Added Active cursors for stim on/off...                                Done
 'Add way for script to recognize 3 and 4 number CGH numbers             Done 8.1
 'Record I_Peak..........................................................Done 8.2
